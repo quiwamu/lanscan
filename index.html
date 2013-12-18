@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>LAN Scan</title>
+<script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
+<script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jqueryui/1.10.3/jquery-ui.min.js"></script>
+<link rel="stylesheet" href="http://ajax.googleapis.com/ajax/libs/jqueryui/1.10.1/themes/ui-lightness/jquery-ui.min.css" type="text/css" media="all" />
+<script type="text/javascript"><!--
+$(function(){
+		$('.disp').click(function(){
+			$(".inp").hide();
+			$(".disp").show();
+			$(this).hide();
+			$(this).parents().children(".inp").show();
+			$(this).parents().find(".txtbox").focus();
+			});
+});
+--></script>
+<style type="text/css"><!--
+.inp {display:none;}
+--></style>
+</head>
+<?php
+require_once('simple_html_dom.php');
+// DB設定-----------------------------------
+$db = new SQLite3('./lanscan.sqlite3');
+//実行結果を返す必要のないクエリ
+//$db->exec('CREATE TABLE ...');
+//実行結果を返すクエリ
+//$rows = $db->query('SELECT * FROM ...');
+//結果を1行ずつ処理する
+//while ($row = $rows->fetchArray(SQLITE3_ASSOC)) { //またはSQLITE3_NUM
+//	var_dump($row);
+//}
+//接続を終了
+//$db->close();
+//------------------------------------------
+//DB登録
+if(strlen($_POST['mac']) > 0 && strlen($_POST['memo']) > 0 && strlen($_POST['submit']) > 0){
+	$add_mac = $_POST['mac'];
+	$add_memo = $_POST['memo'];
+	$rows = null;
+	$rows = $db->query('SELECT id FROM data WHERE mac = "'.$add_mac.'"');
+	if($row = $rows->fetchArray(SQLITE3_ASSOC)){
+		$db->exec('UPDATE data SET memo = "'.$add_memo.'" WHERE id = '.$row['id']);
+	}else{
+		$db->exec('INSERT INTO data(mac, memo) VALUES("'.$add_mac.'", "'.$add_memo.'")');
+	}
+}	
+//表示
+$res_arr = array();
+exec("arp -a", $result);
+foreach($result as $line){
+	$line_arr = explode(' ',$line);
+	//ip
+	$line_arr[1] = str_replace(array("(",")"), "", $line_arr[1]);
+	//mac
+	$mac_arr = explode(":",$line_arr[3]);
+	foreach($mac_arr as $key => $value){
+	if(strlen($value) == 1) $mac_arr[$key] = "0".$value;
+	}
+	$line_arr[3] = implode(":", $mac_arr);
+	//vandor
+	$vendor = null;
+	if(count($mac_arr) == 6){
+		$rows = null;
+		$rows = $db->query('SELECT id, vendor FROM data WHERE mac = "'.$line_arr[3].'"');
+		if($row = $rows->fetchArray(SQLITE3_ASSOC)){
+			//すでにmacがデータベースにある
+			if(strlen($row['vendor']) > 0){
+				$vendor = $row['vendor'];
+			}else{
+				$vendor = getVendor($line_arr[3]);
+				echo $row['id'];
+				$db->exec('UPDATE data SET vendor = "'.$vendor.'" WHERE id = '.$row['id']);
+			}
+		}else{
+			//まだmacがデータベースにない
+			$vendor = getVendor($line_arr[3]);
+			$db->exec('INSERT INTO data(mac, vendor) VALUES("'.$line_arr[3].'", "'.$vendor.'")');
+		}
+	}
+	$line_arr[9] = $vendor;
+	//memo
+	$rows = null;
+	$rows = $db->query('SELECT memo FROM data WHERE mac = "'.$line_arr[3].'"');
+	if($row = $rows->fetchArray(SQLITE3_ASSOC)){
+		$line_arr[10] = $row['memo'];
+	}
+	$res_arr[] = $line_arr;
+}
+//0 hostname
+//1 ip
+//2 at
+//3 mac
+//4 on
+//5 en0
+//6 ifscope
+//7 ethernet
+//9 vendor
+//10 memo
+?>
+<body>
+<table>
+<thead class="ui-list-header">
+<tr class="ui-widget-header"><td>IP</td><td>Hostname</td><td>MAC</td><td>Vendor</td><td>Memo</td></tr>
+</thead>
+<?php
+foreach($res_arr as $key => $val){
+echo '<tr class="ui-widget-content ui-state-default">'.
+	'<td>'.$val[1].'</td>'.
+	'<td>'.$val[0].'</td>'.
+	'<td>'.$val[3].'</td>'.
+	'<td>'.$val[9].'</td>'.
+	'<td class="disp">'.$val[10].'</td>'.
+	'<td class="inp"><form action="index.html" method="POST"><input class="txtbox" type="text" name="memo" value="'.$val[10].'"><input type="hidden" name="mac" value="'.$val[3].'"><input type="submit" value="更新" name="submit"></form></td>'.
+	'</tr>';
+}
+?>
+</body>
+</html>
+<?php
+function getVendor($addr){
+	$html = file_get_html("http://www.coffer.com/mac_find/?string=".urlencode($addr));
+	$vend = $html->find('td[class="table2"]', 1)->plaintext;
+	if(strlen($vend) == 0)$vend = 'n/a';
+	return $vend;
+}
+?>
