@@ -37,6 +37,10 @@ $db = new SQLite3('./lanscan.sqlite3');
 //接続を終了
 //$db->close();
 //------------------------------------------
+//ping broadcast
+if(strlen($_POST['ping']) > 0){
+	exec('ping -c 3 '.$_POST['ping']);
+	}
 //DB登録
 if(strlen($_POST['mac']) > 0 && strlen($_POST['memo']) > 0 && strlen($_POST['submit']) > 0){
 	$add_mac = $_POST['mac'];
@@ -90,7 +94,12 @@ foreach($result as $line){
 		$line_arr[10] = $row['memo'];
 	}
 	$res_arr[] = $line_arr;
+	//broad
+	if($line_arr[3] == "ff:ff:ff:ff:ff:ff"){
+		$broad = $line_arr[1];
+	}
 }
+//$line_arr
 //0 hostname
 //1 ip
 //2 at
@@ -118,7 +127,12 @@ echo '<tr class="ui-widget-content ui-state-default">'.
 	'<td class="inp"><form action="index.html" method="POST"><input class="txtbox" type="text" name="memo" value="'.$val[10].'"><input type="hidden" name="mac" value="'.$val[3].'"><input type="submit" value="更新" name="submit"></form></td>'.
 	'</tr>';
 }
+
+if(strlen($broad) > 0){ 
+	echo '<form action="index.html" method="POST"><input type="hidden" name="ping" value="'.$broad.'"><input type="submit" value="ping broadcast" name="submit"></form>';
+	}
 ?>
+
 </body>
 </html>
 <?php
